@@ -1,0 +1,27 @@
+# Dependency inventory, not a tested or reproducible environment lock.
+# Upstream did not provide version pins. Modern and legacy scripts use different
+# transformers APIs and may require separate environments. Choose a CUDA-compatible
+# torch build for the target host before installing this list.
+torch
+transformers
+numpy
+pandas
+scikit-learn
+tqdm
+matplotlib
+
+# Legacy preprocessing, knowledge and MRC utilities:
+gensim
+jieba
+xlrd
+xlwt
+scipy
+imageio
+wordcloud
+regex
+tensorboard
+tensorboardX
+bert-serving-client
+# Optional historical switches require separate packages: NVIDIA apex (--fp16),
+# ptvsd (remote debugging), tensorflow/tensorflow-datasets (legacy TFDS branch).
+# They are intentionally not installed by this inventory.

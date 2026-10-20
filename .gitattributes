@@ -1,0 +1,6 @@
+# Preserve source assets and the byte-level provenance checks across platforms.
+* -text
+*.zip binary
+*.feather binary
+*.png binary
+*.pdf binary

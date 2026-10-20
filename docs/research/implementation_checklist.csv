@@ -1,0 +1,30 @@
+﻿item_id,subsystem,requirement,acceptance_evidence,stage,status
+D01,data,冻结版本/许可/患者与病案划分/哈希,all identifiers and access recorded,before_training,planned_not_implemented
+D02,data,正标签支持集仅来自训练；零支持标签单列,no test frequency or labels in sampler,before_training,planned_not_implemented
+D03,data,近重复与患者交叉审计,counts and exclusion reasons persisted,before_training,planned_not_implemented
+B01,budget,编码块成本可复算；warmup与额外评分全计入,never exceed B; leftover<cmax,before_training,planned_not_implemented
+R01,reference,r非负、和为1、自然分量正支持,sum abs error<=1e-6,unit_test,planned_not_implemented
+R02,reference,f=Ar且动态b<=f，q=r始终可行,synthetic cooccurrence/extreme-tail checks,unit_test,planned_not_implemented
+S01,solver,在最终q检查探索/覆盖/成本/归一化,declared residual tolerances,unit_test,planned_not_implemented
+S02,solver,异常与未收敛回退r并计数,NaN/infeasible/time budget cases,unit_test,planned_not_implemented
+S03,solver,B4无效用解恒r；κ=1时固定/动态覆盖等价,reuse B2; B5/B6 endpoint distribution equality,unit_test,planned_not_implemented
+E01,EMA,首观测初始化；重复同step合并；间隔归一,known loss sequences yield expected observations,unit_test,planned_not_implemented
+E02,EMA,陈旧衰减与MAD=0情况有限,zero utility fallback; no NaN,unit_test,planned_not_implemented
+I01,importance,存储抽样时q；pi/q停止梯度,q refresh does not rewrite old weights,unit_test,planned_not_implemented
+I02,importance,主实验无裁剪/自归一；检查权重上界,default ratio<=10+numeric tolerance,unit_test,planned_not_implemented
+I03,importance,小型枚举梯度对目标风险核对,conditional weighted gradient matches exact target,unit_test,planned_not_implemented
+I04,importance,抽样前定m_t；训练与曝光按重复抽样重数计,EMA duplicates merged only for scores; no budget overshoot,unit_test,planned_not_implemented
+C01,coverage,按实际消费正例累加；共现一次多标签,E count equals consumed manifest,unit_test,planned_not_implemented
+C02,coverage,报告真实债务而非只报告期望,tail/all/zero-exposure metrics persisted,before_reporting,planned_not_implemented
+P01,checkpoint,保存全部采样/优化器/RNG/预算状态,resume next draws identical at update boundary,integration_test,planned_not_implemented
+P02,checkpoint,数据或label_order变更拒绝恢复,hash mismatch produces explicit error,unit_test,planned_not_implemented
+M01,memory,48GB起始配置做真实显存与吞吐profiling,measured peak and batch settings recorded,pilot,planned_not_implemented
+M02,memory,CPU刷新/加载/策略成本计入墙钟,overhead and fallback rates reported,pilot,planned_not_implemented
+X01,baseline,原TACL算法与仓库变体对应清晰,faithful/native table separate from adapted table,before_training,planned_not_implemented
+X02,baseline,同风险同骨干同输入与预算主表,config diff audited,before_reporting,planned_not_implemented
+V01,validation,开发选择/校准子集分离；测试冻结,global threshold and temperature fixed,before_test,planned_not_implemented
+V02,statistics,3种子与病案/患者配对bootstrap,seed mean/std and declared CI shown,before_reporting,planned_not_implemented
+N01,novelty,ADO为ICLR2025、DataAgent为ICML2026,latest official pages retained,before_submission,planned_not_implemented
+N02,novelty,引用SPMLD/HiCu/Graves等直接先行工作,no broad first-label-aware claim,before_submission,planned_not_implemented
+N03,novelty,InfoBatch明确同风险适配；BLS状态注明作者录用声明,no original-replication or official-CVF assertion,before_submission,planned_not_implemented
+O01,outputs,报告负结果/未执行/估计与实测差别,"no fabricated accuracy, speed or VRAM",always,planned_not_implemented

@@ -1,0 +1,24 @@
+# Known imports from the upstream sources; no upstream version lock was released.
+# Install torch separately for your CUDA/CPU platform before this file.
+# torch
+hydra-core
+omegaconf
+rich
+numpy
+pandas
+pyarrow
+vaex
+scikit-learn
+scipy
+gensim
+transformers
+tokenizers
+wandb
+# Reporting and preserved exploratory experiments:
+matplotlib
+seaborn
+statsmodels
+umap-learn
+tqdm
+# Historical test suite (structural/path tests use stdlib unittest):
+pytest

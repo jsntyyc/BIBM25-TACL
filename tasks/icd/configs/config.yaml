@@ -1,0 +1,42 @@
+defaults:
+  - _self_
+  - data: defaults
+  - dataset: defaults
+  - dataloader: defaults
+  - model: vanillaconv
+  - text_encoder: defaults
+  - trainer: defaults
+  - optimizer: adam
+  - lr_scheduler: defaults
+  - label_transform: one_hot
+  - text_transform: seq_tokens
+  - metrics: defaults
+  - lookup: defaults
+  - callbacks: defaults
+  - experiment: null
+  
+
+# Resolvers are registered by tasks.icd.main before Hydra composes this config.
+paths:
+  data_root: ${oc.env:BIBM25_ICD_DATA_ROOT,${icd_root:}/data/icd/datasets}
+  split_root: ${oc.env:BIBM25_ICD_SPLIT_ROOT,${icd_root:}/data/icd/splits}
+  model_root: ${oc.env:BIBM25_ICD_MODEL_ROOT,${icd_root:}/models/icd}
+  run_dir: ${oc.env:BIBM25_ICD_RUNS_DIR,${icd_root:}/runs/icd}
+experiment_dir: ${paths.run_dir}
+
+hydra:
+  output_subdir: null
+  run:
+    dir: ${icd_path:${experiment_dir}}/hydra/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${icd_path:${experiment_dir}}/hydra/multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+seed: 1337
+deterministic: false
+gpu:
+  - 6
+name: null
+debug: false
+load_model: null # The path where to find the model, text encoder and label encoder
+
+  
+  

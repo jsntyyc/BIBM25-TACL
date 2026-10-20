@@ -1,0 +1,1122 @@
+{
+  "schema_version": "1.0",
+  "title": "TACL 后续研究方案书",
+  "subtitle": "固定预算下，在线学习收益与多标签正例曝光约束的联合课程",
+  "as_of": "2026-10-20",
+  "status": "研究设计；未实现新算法，未进行 GPU 实验",
+  "scope": "ICD 自动编码为主线，TCM 证候分类作跨任务验证；单卡 48GB；知识、检索与 LLM 证据作为第二阶段备选。",
+  "executive_summary": [
+    "建议以一个可测量、可证伪的课程调度问题作为论文贡献：在相同编码 token 预算下，利用在线收益代理选择训练记录，同时限制多标签正例曝光的长期不足。贡献应落在多标签共现、有限预算、目标风险一致性和覆盖可行性的耦合，而不是单独宣称首次标签感知、首次动态课程或首次使用 EMA。",
+    "首先复现原TACL与同骨干随机训练，再检验收益调度、覆盖约束及动态债务反馈的增量作用。无收益时的覆盖版本恒等于静态参考分布，作为等价性检查复用计算，不能当作独立方法。主实验使用显式重要性权重保持自然经验风险；忠实TACL与同风险adaptation分表，改变目标风险的重平衡版本另列。所有性能提升、耗时和显存目前均为待验证假设。",
+    "本轮交付是文献、数学定义、接口与实验计划，不训练模型、不下载受限临床数据，也不将患者文本发送给在线服务。"
+  ],
+  "sections": [
+    {
+      "id": "s01",
+      "title": "1. 研究问题、研究边界与三条假设",
+      "lead": "把研究问题从更换编码器收敛为：训练预算有限时，应如何决定下一批记录，以及如何避免尾标签在选择过程中失去正例曝光。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "原 TACL 将训练样本划分难度并自适应推进课程，覆盖 ICD 编码、再入院预测和 TCM 证候等任务。仓库中同时存在 APW、质心距离、KMeans 与多种实验脚本。后续工作必须区分论文算法、代码变体和可运行复现入口；不能先合并变体再把所得结果当作原论文复现。",
+          "citation_ids": [
+            "ren2025tacl"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "本研究保留成熟领域编码器与标签预测头。首轮不添加图网络、检索重排或 LLM 在线教师。方法是否有效，应由同骨干、同数据划分、同目标风险、同预算的比较证明。英文 ICD 多标签分类承担主要发现；中文 TCM 任务检验同一个调度器是否能够跨语言、跨输出形式复用。",
+          "citation_ids": []
+        },
+        {
+          "type": "table",
+          "columns": [
+            "假设",
+            "可检验命题",
+            "主要证据",
+            "反证条件"
+          ],
+          "rows": [
+            [
+              "H1：收益与覆盖互补",
+              "完整方法相较收益独用、静态参考r和固定覆盖下界有增量，减少尾标签曝光债务并提高尾标签F1；u=0版本与r等价，合并验证。",
+              "固定预算主矩阵、固定/动态覆盖消融、覆盖—性能曲线。",
+              "完整方法与静态参考或固定覆盖无稳定差异，或收益来自改变训练目标。"
+            ],
+            [
+              "H2：效率而非预算换分",
+              "同编码 token 预算下达到更高性能，或达到基线性能所需 token/墙钟更少。",
+              "25%/50%/100%预算检查点及达到目标分数的成本。",
+              "只在增加训练 token、离线打分成本或延长训练后获益。"
+            ],
+            [
+              "H3：任务间机制可迁移",
+              "在预注册的 TCM 配置中，同一覆盖—收益机制保持方向一致，无须重设计课程。",
+              "ICD 与 TCM 分别调有限超参、共享定义与消融。",
+              "只能为每个任务定制不同评分器或依赖不可获得的医学本体。"
+            ]
+          ],
+          "caption": ""
+        },
+        {
+          "type": "paragraph",
+          "text": "H1–H3 是研究假设，不是结果。只有实际运行与统计评估后才能使用“提升”“节省”或“泛化成功”等结论。若主矩阵否定 H1，优先归因收益估计、覆盖约束或优化目标，不追加多种大模型模块掩盖失败。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s02",
+      "title": "2. 相关工作与可以主张的新意",
+      "lead": "已有工作分别研究了学习进展、标签多样性、层次课程、长尾损失和动态数据代理；新意应通过对这些因素的受控比较建立。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "Graves 等已用学习进展奖励驱动自动课程；SPMLD 已显式使用实例—标签权重与标签多样性，避免只学习容易标签；HiCu 利用 ICD 输出标签树从粗到细构造课程。因此“动态”“标签感知”“保护多样性”不能分别作为本工作的首次贡献。",
+          "citation_ids": [
+            "graves2017acl",
+            "seyedi2019spmld",
+            "ren2022hicu"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "ADO 的正式发表状态是 ICLR 2025，其 2024 arXiv 版本不是最终书目状态。ADO 在线估计数据域学习潜力并调整混合，说明“免代理模型的在线收益分配”已有直接先行工作。Data Agent 已发表于 ICML 2026，使用随模型训练共演化的选择策略及复合奖励，因此不能将端到端动态数据选择笼统写作研究空白。",
+          "citation_ids": [
+            "jiang2025ado",
+            "yang2026dataagent"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "InfoBatch已发表于ICLR2024：它维护逐样本loss，以均值为阈值随机裁剪部分低loss样本，对保留下来的低loss样本重标梯度，并在末期恢复全量训练。因此本文不能把动态loss选样、梯度期望校正或无需独立教师本身当作新贡献。区别须落在多标签实际正例曝光、始终可行的债务下界、最终采样分布和固定成本的联合约束；InfoBatch适配版必须进入同风险主比较。",
+          "citation_ids": [
+            "qin2024infobatch"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "BLS用样本参与批次的平均loss条件EMA，估计平滑的loss贡献；作者arXiv标注CVPR2026 accepted，本次未独立核实CVF收录页。它与本文EMA的共同点是缓存时间信号，差别是BLS估计loss水平，本文使用按更新间隔归一的loss下降速率，后者仍只是观测收益代理。不能仅凭换成EMA或解释为低通滤波宣称novelty。采用BLS取分加同一InfoBatch适配器可分离评分与调度。",
+          "citation_ids": [
+            "zhou2026bls"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "候选贡献是：以多标签正例曝光为可测量资源，在一个具有显式可行参考分布、探索下界、成本限制和重要性校正的采样问题中耦合覆盖债务与在线收益代理。相较 SPMLD 的多样性正则，本方案约束可解释的正例曝光；相较 HiCu 的输出粒度课程，本方案调整输入记录；相较 ADO 的互斥数据域，本方案处理同一记录对多个标签同时贡献曝光；相较 Data Agent，本方案不额外训练策略网络，强调可行性、目标风险与低开销。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "上述差异是可防守的研究定位，不等于穷尽性 novelty 证明。投稿前仍须复核同年后续版本，报告已检索的时间边界，并避免把“未检索到”写成“不存在”。2025 年 CD-GTMLL 预印本利用稀有标签与预测分歧的动态奖励，也限制了“尾标签探索”这一宽泛主张。",
+          "citation_ids": [
+            "xiao2025curiosity"
+          ]
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "必须证明：优势不是仅由逆频率过采样带来。",
+            "必须证明：优势不是删除长文本、降低输入覆盖或增加预处理成本带来。",
+            "必须证明：优势不是阈值、患者划分、损失函数或早停准则不同带来。",
+            "可以提交的理论内容：参考分布始终可行、探索下界对应的权重上界、采样梯度的条件无偏性。不能预先承诺深度网络全局收敛或确定的尾类 F1 提升。"
+          ],
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s03",
+      "title": "3. 数据、任务适配与不可泄漏的信息边界",
+      "lead": "仅对已获授权的本地训练数据构造统计；验证集负责模型选择与校准，测试集在方案冻结后评估。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "ICD 主线优先保持原项目现有 MIMIC 数据与 ICD 版本，以明确评价相较 TACL 的改进。Top-50 适合调试，但标签已被频次截断，不能独立支持极端长尾结论。主结论必须至少覆盖一个完整标签设置。若授权和数据齐备，再增加 MIMIC-IV ICD-10；ICD-9 与 ICD-10 分别训练、分别报告，不把简单代码映射当作无缝跨版本迁移。",
+          "citation_ids": [
+            "huang2022plmicd",
+            "edin2023repro"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "数据清单记录原始版本、许可前提、文档 ID、患者或入院组 ID、来源、划分哈希、训练标签表及计数、文本长度分布、截断比例与排除原因。标签词表只能由训练集和预先允许的官方本体确定；仅在测试中出现的标签报告为不可训练标签，不从测试频次回填课程。相同患者的多份记录与文本近重复均需审计，不能仅随机拆分行。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "TCM 采用项目既有148类单标签证候任务：当前入口读取JSONL的TEXT与整数LABEL，模型使用CrossEntropyLoss。将LABEL转换为one-hot的正例关联矩阵，课程层接收相同的样本ID、正标签索引、成本和观测损失；中文分词器、预测头和CE由任务适配器负责。若未来新增多标签证候数据，应作为新任务另立协议，不修改首轮定义。病案/患者标识若缺失，必须明确报告划分审计的限制；没有医学层次时不人为构造TCM本体。",
+          "citation_ids": []
+        },
+        {
+          "type": "table",
+          "columns": [
+            "信息",
+            "可用于训练课程",
+            "可用于模型选择",
+            "禁止用途"
+          ],
+          "rows": [
+            [
+              "训练标签/训练损失/训练长度",
+              "是；含频次、共现与曝光状态",
+              "是",
+              "不得混入其他划分的计数"
+            ],
+            [
+              "开发集标签和指标",
+              "不逐记录进入课程；仅全局超参选择",
+              "是；选择检查点与阈值",
+              "不得针对开发记录调整采样"
+            ],
+            [
+              "测试标签/测试误差",
+              "否",
+              "否",
+              "不得选择覆盖阈值、难度、早停或阈值"
+            ],
+            [
+              "描述/同义词/祖先知识",
+              "第二阶段允许；固定来源与版本",
+              "只调预注册少量参数",
+              "不得用测试答案合成训练 guideline"
+            ]
+          ],
+          "caption": ""
+        },
+        {
+          "type": "paragraph",
+          "text": "公开代码与公开可申请数据并非无限制可分发。MIMIC 需要合格访问与协议；文献提供的证据标注也不能脱离原数据权限使用。本轮不下载临床原始数据，不尝试访问受限病案，不调用外部 LLM 分析患者文本。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s04",
+      "title": "4. 固定预算、符号与优化目标",
+      "lead": "先定义预算、损失与采样单位，再讨论课程；否则不同方法可能在不同任务上竞争。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "设训练集有 N 份记录，A∈{0,1}^{L×N} 为正例关联矩阵，A_li=1 表示记录 i 含标签 l；只对训练集中至少出现一次的标签建立覆盖约束。同一记录可同时增加多个标签曝光。n_l=Σ_i A_li。TCM 单标签只是每列恰有一个 1 的特例。训练抽样有放回；这里的曝光是记录实际进入一次训练前向/反向，而不是记录被索引、被检索或出现在候选池。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "R_\\pi(\\theta)=\\sum_{i=1}^{N}\\pi_i\\ell_i(\\theta),\\quad\\pi_i=1/N",
+          "plain_text": "R_pi(theta)=sum_i pi_i loss_i(theta), pi_i=1/N",
+          "caption": "主实验固定自然经验风险。改变目标分布的实验必须另列。"
+        },
+        {
+          "type": "paragraph",
+          "text": "ICD 的训练风险损失采用同骨干统一的完整标签 BCE；单标签 TCM 用 CE。ASL/DBL 是额外损失对照，在同一种损失内部比较采样器。本文的难度观测可以对正负项做平衡，防止数千个容易负标签淹没信号，但难度观测不是优化风险本身。不得把评分函数悄悄当作训练损失。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "c_i=C\\left\\lceil\\frac{\\min(T_i,T_{\\max})}{C}\\right\\rceil,\\quad\\sum_{s=1}^{S}c_{i_s}\\le B",
+          "plain_text": "cost_i=chunk_size*ceil(min(token_length_i,max_length)/chunk_size); total encoded tokens<=B",
+          "caption": "预算以固定长度编码块的实际输入 token 计数，包含块内 padding。"
+        },
+        {
+          "type": "paragraph",
+          "text": "C 是统一分块长度，T_max 是统一截断上限。相同记录在相同配置下有相同可预先确定的编码成本；不采用随批动态 padding 的含糊“有效 token”近似比较。若未来改用动态 padding，必须同时记录非 padding 与实际编码 token，并重新定义成本约束。单卡显存限制的是微批；梯度累积不应改变记录级成本计数。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "预注册 B100=10×Σ_i c_i，B25/B50 分别为其 25%/50%；warmup、原 TACL 离线难度训练与额外重打分的编码 token 都计入方法总预算。先用1个种子筛查所有主方法，再以相同累计预算扩展到3个种子。10次自然遍历是设计默认值，不是已测最优训练长度；如前置复现发现严重不足，只能在查看测试前统一修改并记录版本。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "m_t=\\min\\{16,\\lfloor B_{\\rm remaining}/c_{\\max}\\rfloor\\}",
+          "plain_text": "effective_batch_size=min(16,floor(remaining_budget/max_record_cost))",
+          "caption": "有效批大小在抽样之前由历史剩余预算决定；微批1并累积m_t条。"
+        },
+        {
+          "type": "paragraph",
+          "text": "当m_t=0时停止；否则从当前q独立有放回抽恰好m_t条，按实际m_t而非固定16求平均。最坏总成本m_t*c_max不超过剩余预算，因此不拒绝已抽记录、不按短记录重归一化，也不使批大小依赖本批抽样结果。训练后记录实际成本，终止时未使用预算<c_max。所有方法使用相同规则；曲线按实际累计token对齐，墙钟另测。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s05",
+      "title": "5. 可行参考分布、探索与正例覆盖债务",
+      "lead": "参考分布同时承担可行性证据、尾标签探索来源和重要性权重下界；不把“每批覆盖所有尾标签”当作可实现要求。",
+      "blocks": [
+        {
+          "type": "equation",
+          "latex": "r_i=(1-\\eta)/N+\\eta\\sum_{l=1}^{L}\\frac{1}{L}\\frac{A_{li}}{n_l},\\quad0\\le\\eta<1",
+          "plain_text": "r_i=(1-eta)/N+eta*sum_l[(1/L)*A_li/n_l]",
+          "caption": "先均匀抽训练标签，再均匀抽该标签的正例，最后与自然记录分布混合。"
+        },
+        {
+          "type": "paragraph",
+          "text": "Σ_i r_i=1，因为每个标签条件分布都归一化；r_i≥(1−η)/N，因此所有训练记录保持支持。多标签记录可能因服务多个稀有标签获得更高 r_i，这是显式定义的参考分布性质，不是假设标签互斥。只使用训练支持集；n_l=0 的标签既不能被抽到正例，也不纳入可行覆盖目标。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "f_l=\\sum_i A_{li}r_i,\\quad b_l^0=\\kappa f_l,\\quad\\bar c=\\sum_i r_ic_i",
+          "plain_text": "f=A*r; base_exposure=kappa*f; reference_cost=sum_i r_i*c_i",
+          "caption": "覆盖下界取自一个真实可抽样分布；成本上界也取自同一分布。"
+        },
+        {
+          "type": "paragraph",
+          "text": "默认 η=0.5、κ=0.8。这里 f_l 是每次记录抽样的正例命中概率，既不是目标临床患病率，也不是部署时预测先验。若同时对所有标签设定任意相同的最低比例，稀有标签之间的共现与预算成本可能令问题不可行；从 r 构造目标直接消除了这一风险。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "E_l(S)=\\sum_{s=1}^{S}A_{l i_s},\\quad D_l(S)=[Sb_l^0-E_l(S)]_+",
+          "plain_text": "actual_exposure_l=sum over consumed records A_l,i; debt_l=max(S*base_exposure_l-actual_exposure_l,0)",
+          "caption": "曝光 E 来自实际消费记录；债务 D 是相对基础覆盖目标的实际不足。"
+        },
+        {
+          "type": "equation",
+          "latex": "b_l(t)=\\min\\{f_l,\\ b_l^0+D_l(S_t)/H\\}",
+          "plain_text": "next_target_l=min(reference_exposure_l,base_exposure_l+debt_l/horizon)",
+          "caption": "用债务提升后续期望覆盖需求，且不超过参考分布可服务的概率。"
+        },
+        {
+          "type": "paragraph",
+          "text": "默认 H=N 个记录抽样，作为债务修复时间尺度；这是名义窗口，不要求每个 epoch 中每条记录恰好一次。b_l(t)≤f_l 保证 r 在所有刷新时刻可行。债务大时可接近参考分布的服务率；永久预算耗尽时仍可能存在随机债务，不能把期望约束宣称为有限样本的确定性覆盖保证。对极少标签应显示实际曝光次数及置信区间，不能只给百分比。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "q_{t,i}\\ge\\varepsilon r_i,\\quad q_t=\\varepsilon r+(1-\\varepsilon)p_t,\\quad p_t\\in\\Delta_N",
+          "plain_text": "q_i>=epsilon*r_i; q=epsilon*r+(1-epsilon)*p",
+          "caption": "探索属于最终采样分布；必须在该最终分布上检查所有约束。"
+        },
+        {
+          "type": "paragraph",
+          "text": "默认 ε=0.2，整个训练期保持不为零。探索为长期未刷新的记录重新提供观测，避免评分自我强化。若先约束 p、再加上探索，或加上长度桶后再次任意归一化，最终 q 可能破坏覆盖和成本约束；实现时检查的对象始终是最终实际抽样分布。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s06",
+      "title": "6. 在线收益代理、刷新间隔与陈旧状态",
+      "lead": "收益是当前模型训练动态的代理量，不是已证明的样本因果效用；它应便宜、可审计且在不同曝光频率间可比较。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "每条记录保存最近一次训练前向的评分损失v_i、观测时刻t_i、EMA速率g_i、观测次数k_i。第一次出现时初始化v_i与t_i，令g_i=0；第二次不同更新步观测后才估计下降速率。同一步重复ID只对EMA评分取平均合并，避免零时间间隔；训练损失、重要性权重、成本以及E/S曝光仍保留每次实际消费的重数。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "v_i=\\tfrac12\\operatorname{mean}_{l:A_{li}=1}\\!\\operatorname{BCE}_{il}+\\tfrac12\\operatorname{mean}_{l\\in\\mathcal N_i}\\!\\operatorname{BCE}_{il}",
+          "plain_text": "score_loss_i=0.5*mean positive BCE+0.5*mean BCE on fixed sampled negatives",
+          "caption": "ICD 评分对正例和固定负例子集平衡，避免负标签数量决定难度。"
+        },
+        {
+          "type": "paragraph",
+          "text": "每条记录的负例集合 N_i 从训练标签词表中按 seed 与 sample_id 的固定哈希选择至多32个负标签，所有方法共享。记录无正标签时评分只取负项；无可用负标签时只取正项。TCM 单标签评分使用真实 CE。评分由 detached 的未乘重要性权重损失产生，不能把采样权重本身形成的噪声再次反馈为收益。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "\\delta_i=(v_i^{old}-v_i^{new})/\\max(1,t-t_i),\\quad a_i=\\exp[-(t-t_i)/K],\\quad g_i\\leftarrow a_ig_i+(1-a_i)\\delta_i",
+          "plain_text": "delta=(old_score-new_score)/elapsed_optimizer_updates; decay=exp(-elapsed/K); ema=decay*ema+(1-decay)*delta",
+          "caption": "按经过的优化更新数归一化，并使用同一时间尺度的 EMA 衰减。"
+        },
+        {
+          "type": "paragraph",
+          "text": "默认K=200个优化器更新。按真实间隔衰减减少一种刷新时间尺度差异，但不能消除自适应观测或未观测偏差，仍须检查年龄与观测次数分组。时间单位固定为optimizer update，不能混用微批或epoch。归一化后的下降仍可能包含其他样本训练产生的迁移效应，因此称“观测收益速率”，不称该样本独有的边际收益。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "\\tilde g_i=g_i\\exp[-(t-t_i)/K],\\quad u_i=\\operatorname{clip}\\!\\left(\\frac{\\tilde g_i-\\operatorname{median}(\\tilde g)}{1.4826\\operatorname{MAD}(\\tilde g)+10^{-8}},-3,3\\right)",
+          "plain_text": "age-decayed gain; robust median/MAD standardization; clip utility to [-3,3]",
+          "caption": "陈旧收益向零衰减；只对至少有两次观测的记录计算稳健尺度。"
+        },
+        {
+          "type": "paragraph",
+          "text": "median/MAD严格只在O_t={i:k_i≥2}上计算，不包含尚无两次观测的零占位项；然后对O_t中的记录标准化，其他记录用u_i=0。O_t为空或其MAD为零时全部u_i=0。年龄衰减tilde_g_i只读地由持久g_i和last_step派生；刷新不得原地写回g_i，否则反复刷新及下次观测会重复衰减。每200个更新重建q。首个5% token预算使用r作warmup并计入预算；第二次观测不足时保持参考分布，不额外跑教师。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "另记录各频次组的评分刷新年龄、收益分布和观测次数，检查“高收益”是否仅因更新鲜或更短。若偏差明显，先报告并用预注册的同长度桶稳健标准化作敏感性对照；不在看到测试结果后自由切换评分定义。模型遗忘会使 δ_i<0；主方法保留负速率，不通过只截取正下降假装所有数据都在进步。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s07",
+      "title": "7. 联合课程优化与可行性",
+      "lead": "每次刷新时求解一个分布问题；覆盖、探索与成本在同一个最终分布中成立，避免规则串接后相互抵消。",
+      "blocks": [
+        {
+          "type": "equation",
+          "latex": "q_t^*=\\arg\\max_{q\\in\\Delta_N}\\{\\langle q,u_t\\rangle-\\tau\\operatorname{KL}(q\\Vert r)\\}",
+          "plain_text": "maximize expected utility minus tau*KL(q||r)",
+          "caption": "效用优先选择当前有学习潜力的记录，KL 正则控制偏离参考分布的程度。"
+        },
+        {
+          "type": "equation",
+          "latex": "\\text{s.t.}\\quad Aq\\ge b(t),\\quad q_i\\ge\\varepsilon r_i,\\quad c^\\top q\\le\\bar c",
+          "plain_text": "constraints: expected positive exposures>=dynamic targets; exploration floor; expected token cost<=reference cost",
+          "caption": "期望覆盖与期望成本约束，预算执行另由训练循环硬限制。"
+        },
+        {
+          "type": "paragraph",
+          "text": "τ默认0.5。因为r归一化、Ar=f≥b(t)、r≥εr且cᵀr=平均参考成本，r始终可行。τ>0、r_i>0时KL严格凸，分布子问题有唯一最优解。若u=0，则目标为−τKL(q||r)，唯一解恰为r；因此“覆盖独用”在本设计中与静态r等价。B4只作等价性sanity check复用B2，不另分配GPU训练预算。上述均为分布子问题性质，不保证神经网络全局最优。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "q_i=\\max\\!\\left\\{\\varepsilon r_i,\\ r_i\\exp\\!\\left(\\frac{u_i+(A^\\top\\lambda)_i-\\nu c_i-\\alpha}{\\tau}\\right)\\right\\}",
+          "plain_text": "q_i=max(epsilon*r_i,r_i*exp((u_i+(A.T*lambda)_i-nu*c_i-alpha)/tau))",
+          "caption": "λ_l≥0对应覆盖、ν≥0对应成本、α∈R负责归一化；KL导数常数吸收入α。"
+        },
+        {
+          "type": "paragraph",
+          "text": "未来实现采用稀疏矩阵乘法和固定迭代预算的对偶更新，归一化通过α的一维二分求解；“固定预算”不意味着人为截断对偶后仍保证收敛。成本先除以参考平均成本稳定尺度。每次刷新最多50次迭代，warm-start上次λ、ν、α；检查归一化误差1e−6、探索相对误差1e−6、成本相对违反1e−4、覆盖违反max_l[(b_l−(Aq)_l)_+/max(f_l,1/N)]≤1e−3。50次内不达标即回退r，不保证固定次数找到可行近似解。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "若出现 NaN、未满足容差或耗时超过两次连续刷新期间训练墙钟的10%，该次使用 r，增加 fallback_count，并记录错误；连续3次失败暂停该实验查因。不得对违反约束的输出简单归一化后继续宣称覆盖成立。预注册可行回退是方法行为的一部分，需报告回退比例。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "这里没有执行求解器或新课程实现。对偶形式、容差与回退定义用于后续工程实现和单元检验。是否在48GB机器与完整标签设置下低开销，必须实测 CPU刷新、数据装载与GPU吞吐之后判断。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s08",
+      "title": "8. 采样偏差、风险选择与理论声明边界",
+      "lead": "改变抽样概率本身就改变训练分布；公平比较需要明确是更快优化同一风险，还是有意改变风险。",
+      "blocks": [
+        {
+          "type": "equation",
+          "latex": "\\hat g_t=\\frac1{m_t}\\sum_{j=1}^{m_t}\\frac{\\pi_{I_j}}{q_{t,I_j}}\\nabla_\\theta\\ell_{I_j}(\\theta_t),\\quad I_j\\sim q_t",
+          "plain_text": "batch_gradient=mean over draw positions j of (pi[I_j]/q[I_j])*gradient(loss[I_j])",
+          "caption": "有放回抽样按位置/多重集计数；重复ID不能在训练梯度中去重。"
+        },
+        {
+          "type": "paragraph",
+          "text": "在给定历史与当前参数时，只要 q 固定于该次抽样、每条记录均有支持、风险损失的所有标签项均按统一定义计算，上式对 ∇R_pi 条件无偏。q 对历史损失的依赖不破坏这一条件；实现时对 q 和重要性权重 stop-gradient，并使用抽样当时的概率。不能在下一次刷新后用新 q 追溯计算旧样本权重。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "\\frac{\\pi_i}{q_{t,i}}\\le\\frac{1}{\\varepsilon(1-\\eta)}=10\\quad(\\pi_i=1/N,\\ \\varepsilon=0.2,\\eta=0.5)",
+          "plain_text": "importance_ratio<=1/[epsilon*(1-eta)]=10 under default natural target",
+          "caption": "探索和自然分量共同提供有限权重上界，无需主实验中的额外裁剪。"
+        },
+        {
+          "type": "paragraph",
+          "text": "主实验不对重要性权重裁剪、不做批内自归一化，避免隐式偏差。若梯度方差仍不可接受，先提高 ε 或降低 η，并用相同超参网格比较；裁剪或 self-normalized 版本仅作明确标注的偏差—方差消融。有效样本量 ESS=(Σw)^2/Σw²、最大权重与梯度范数必须记录。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "忠实原TACL阶段硬遮罩会令部分q_i=0，因而不能在这些阶段用π/q恢复全训练集的自然风险。忠实TACL保留原行为、单独报告。主表的TACL对照明确命名TACL+exploration+IS adaptation：以阶段内归一化分布p_stage构造最终q=εr+(1−ε)p_stage，再用π/q；空阶段回退r。该适配不是原论文原样复现，必须分别报告忠实与适配结果。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "重要性校正意味着尾标签被更多曝光并不等于尾标签风险权重更大。预期优势来自有限预算下的优化效率和方差控制，而不是宣称改变了全局最优风险。额外重平衡目标可设 π=r，但必须让自然采样、TACL和联合课程都优化同一 π 后再比较；π=r 的结果不能与 π=uniform 的结果混入同一主表。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "给定 t 的 Aq≥b(t) 是条件期望覆盖，而实际 E_l 是随机量。有限 token 停止、mini-batch 组装、模型损失非平稳与陈旧评分使简单独立同分布置信界不直接适用。本轮只主张可行性与单次梯度性质；若后续写覆盖高概率界，须明确适应性鞅条件与随机终止规则。不要把债务减少自动推导为宏F1提高。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "mini-batch 内的长度排序只允许重排已经按 q 抽到的记录，不能丢弃或额外替换记录；梯度累积按抽样记录数求均值。若未来使用无放回抽样，当前 π/q 公式不再自动适用，须重新定义包含概率。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s09",
+      "title": "9. 伪码、接口、日志与 checkpoint",
+      "lead": "接口按任务无关的采样状态设计；模型、标签预测与评价保留在原任务适配层。",
+      "blocks": [
+        {
+          "type": "pseudocode",
+          "caption": "研究算法伪码；仅为实现规格，本轮未执行。",
+          "text": "Input: train manifest, sparse A, costs c, model, seed, token budget B\nBuild r, f=A r, base b0=kappa*f, reference cost cbar; q=r\nInitialize per-record last_loss,last_step,gain,count; exposure E=0; S=0\nwhile remaining_tokens >= max(c):\n  choose m_t=min(16,floor(remaining_tokens/max(c))) BEFORE any batch draw\n  if warmup completed and optimizer_step % refresh_steps == 0:\n    derive age-decayed gains READ-ONLY; median/MAD on count>=2 subset -> u\n    debt=max(S*b0-E,0); target=min(f,b0+debt/H)\n    solve constrained KL distribution; verify final q; fallback r on failure\n  draw EXACTLY m_t independent positions WITH replacement from q; store q/version\n  run microbatches; compute full per-draw risk loss and detached score\n  backprop sum((pi/q_draw)*risk_loss)/m_t; accumulate and optimizer-step\n  merge same-step duplicate-ID SCORES only; update elapsed-normalized EMA\n  E += positive labels for EVERY consumed draw, including duplicates; S += m_t\n  tokens += sum exact chunk costs; save token/checkpoint/evaluation events\nSelect checkpoint and thresholds by development data; evaluate frozen test once"
+        },
+        {
+          "type": "table",
+          "columns": [
+            "接口/对象",
+            "最小输入或状态",
+            "输出/约束"
+          ],
+          "rows": [
+            [
+              "TaskAdapter",
+              "sample_id；group_id；positive_label_ids；encoded_cost；model loss",
+              "per-record risk loss 与 detached score；不读取其他数据划分"
+            ],
+            [
+              "CurriculumState",
+              "reference r；EMA状态；曝光E；累计S；剩余token；solver状态",
+              "sample(index,draw_probability,policy_version)"
+            ],
+            [
+              "observe(batch)",
+              "实际消费ID；抽样时概率；pre-update score；optimizer_step",
+              "更新EMA、曝光与预算；同一step重复ID合并评分"
+            ],
+            [
+              "refresh()",
+              "当前utility；动态目标；成本；可行参考",
+              "最终q及归一化/探索/覆盖/成本残差；可行回退标志"
+            ],
+            [
+              "state_dict/load_state_dict",
+              "schema_version；数据哈希；label_order；RNG状态",
+              "恢复同一采样轨迹；哈希或标签序列变化即拒绝恢复"
+            ]
+          ],
+          "caption": ""
+        },
+        {
+          "type": "paragraph",
+          "text": "checkpoint 除模型与优化器外，保存 scheduler、AMP scaler、Python/NumPy/torch/CUDA RNG、token消耗、梯度累积余量、样本顺序哈希、标签词表哈希、r与q、policy_version、last_loss/last_step/gain/count、E/S、对偶变量和回退计数。保存于优化器更新边界；若支持中途微批恢复，必须保存尚未提交的梯度与采样队列，否则仅宣称更新边界可复现。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "每次刷新日志记录：编码token/实际墙钟/显存峰值、utility分位点、年龄分位点、各频次组正例曝光、归一化覆盖债务、ESS与最大权重、求解器迭代/耗时/残差、回退事件。日志只使用ID与统计，不写完整病历文本。评价输出另有预测分数、标签序列、全局阈值及数据划分哈希，保证可复算。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "建议未来新增 task-independent curriculum 模块与独立配置，不在多个 run_* 脚本分别复制算法。此处只定义接口契约；具体路径由实施阶段根据整理后的仓库布局确定。算法变更、训练、联网模型获取与数据许可均不属于本轮文档交付的已执行事项。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s10",
+      "title": "10. 单卡48GB资源路径与复杂度",
+      "lead": "先用可控骨干建立机制证据；任何显存或时间数字都分为文献设置、规划估计与本机实测三类。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "首轮英文使用项目PLM-ICD配置中的RoBERTa-base-PM-M3-Voc-distill-align-hf及标签注意力头，C=128、T_max=4096；ICD各采样方法完全一致。采用bf16（硬件不支持则fp16）、微批1、梯度累积16；开启梯度检查点，关闭训练中无关图形输出。TCM使用既有中文领域编码器与148类CE预测头，T_max=512，微批由相同有效记录批大小16约束。实际本地权重及tokenizer版本以文件哈希在运行清单冻结。上述是48GB规划起点，不是显存适配已验证。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "如首轮配置OOM，统一减小所有方法的截断上限至2048或分块长度至64，只在开发前置试验确定一次，并报告失去的证据覆盖。不能为新方法截断更多文本而单独为基线保留长文本，或在比较后将此配置差异解释为效率优势。第二阶段扩展8192仅作为输入长度敏感性，不与4096主表混合。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "\\text{state memory}=O(N+L+\\operatorname{nnz}(A)),\\quad\\text{refresh work}=O(J[N+\\operatorname{nnz}(A)])",
+          "plain_text": "state O(N+L+nnz(A)); refresh O(J*(N+nnz(A)))",
+          "caption": "J为对偶迭代数；不构造N×L的稠密样本—标签状态。"
+        },
+        {
+          "type": "paragraph",
+          "text": "每样本保存少数float32/int64数组，稀疏A可用CSR/CSC两种视图；全局q与参考r保留CPU，抽样索引传入GPU。以N=5万、平均每记录10个正标签为量级例，状态应在几十MB级，而不是把所有标签损失历史保存在GPU。该量级是按数组规模估算，不是实测；最终记录进程RSS、CPU刷新耗时、加载等待及GPU allocated/reserved峰值。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "在标准训练前向中读取detached损失，不增加教师模型或全量打分。刷新默认200个优化器更新，J最多50。若CPU投影成为瓶颈，先降低刷新频率或利用稀疏对偶warm-start；所有更改记录在配置中，并保留原默认实验结果。不得把CPU瓶颈排除出方法总墙钟。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "后续先用500个更新的授权数据试点测吞吐v（编码token/秒）、峰值显存和刷新占比，估计单次运行时间T≈B/v+预处理与评价成本。全部矩阵资源估计按实际运行数、种子和共同检查点展开，不把25%/50%检查点重复计成独立训练。只有获得试点实测后才能提供GPU小时或日历工期；本方案没有编造速度、GPU小时或本机通过结论。",
+          "citation_ids": []
+        },
+        {
+          "type": "table",
+          "columns": [
+            "来源",
+            "可核实资源设置",
+            "本项目的处理"
+          ],
+          "rows": [
+            [
+              "GKI-ICD",
+              "论文H20 96GB；8192 tokens；原文+guideline双路训练。",
+              "备选增强；不承诺48GB原样复现。"
+            ],
+            [
+              "MSAM/校准论文",
+              "论文A100 80GB，分块训练长度受硬件限制。",
+              "借鉴评价和长文本处理；不将其完整资源设置当本机基线。"
+            ],
+            [
+              "2026证据学习",
+              "70B AWQ约40GB只是权重/相关内存量级；完整设置用A100 80GB。",
+              "首轮不加载70B；后续可复用获准证据或小模型。"
+            ],
+            [
+              "本文联合课程",
+              "CPU稀疏状态与正常训练损失；没有GPU实测。",
+              "以48GB显存峰值、刷新占比和总墙钟的实测决定是否继续。"
+            ]
+          ],
+          "caption": ""
+        }
+      ]
+    },
+    {
+      "id": "s11",
+      "title": "11. 预注册实验矩阵与公平比较",
+      "lead": "先回答单一机制问题，再扩展知识；主表每一行必须有统一风险、骨干、长度、优化器和预算。",
+      "blocks": [
+        {
+          "type": "table",
+          "columns": [
+            "方法族",
+            "保留的因素",
+            "控制的替代解释"
+          ],
+          "rows": [
+            [
+              "B0自然随机",
+              "uniform有放回抽样；自然经验风险",
+              "最基本训练表现；同token预算与同模型。"
+            ],
+            [
+              "B1同风险TACL适配",
+              "原阶段策略+探索全支持+IS；忠实原TACL单表",
+              "同风险主表可比较；不能把适配称作原样复现。"
+            ],
+            [
+              "B2静态参考r",
+              "相同尾标签参考分布；π/q校正",
+              "效果是否仅来自重平衡采样。"
+            ],
+            [
+              "B3收益独用",
+              "EMA收益、KL参考、相同探索与成本；移除Aq约束",
+              "收益是否导致尾标签饥饿。"
+            ],
+            [
+              "B4等价性sanity",
+              "u=0时q=r；与B2相同，直接复用B2结果和预算",
+              "核对求解器，不作为独立训练或独立方法。"
+            ],
+            [
+              "B5收益+固定覆盖",
+              "与B6同utility、参考和成本，但始终使用b0=κAr",
+              "动态债务修复是否超出固定覆盖约束。"
+            ],
+            [
+              "B6完整联合",
+              "EMA收益+债务约束+探索+成本；同一π",
+              "验证耦合机制。"
+            ],
+            [
+              "B7损失/相关课程",
+              "ASL或DBL；HiCu；SPMLD思想适配",
+              "不是一般长尾损失或已知课程的重复。"
+            ],
+            [
+              "IB：InfoBatch适配",
+              "近期低loss随机裁剪思想+同风险π/q；原版重标定不叠乘",
+              "区分新覆盖约束与已有动态裁剪/梯度校正。"
+            ]
+          ],
+          "caption": ""
+        },
+        {
+          "type": "paragraph",
+          "text": "B0/B1/B2/B3/B5/B6先在完整ICD上跑B25/B50/B100检查点，首种子13；无失败后补17和23。B4只核对u=0输出r并复用B2，不新增训练。B1是TACL+exploration+IS adaptation；忠实原TACL作为另行标记的fidelity行。若无可靠原入口，记录复现失败而非替换为未核验变体。所有检查点来自连续训练，不重复计训练预算。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "主超参固定采用η=0.5、ε=0.2、κ=0.8、τ=0.5、K=200、refresh=200、warmup=5%。只在开发集作少量敏感性：ε∈{0.1,0.2,0.4}、κ∈{0.5,0.8,1.0}、τ∈{0.2,0.5,1.0}，采用单因素变化，不穷举27组。候选配置的调参token与墙钟单独计入总项目资源。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "完整ICD主矩阵通过后，TCM运行B0/B1/B2/B3/B6与忠实TACL行，三种子、B50/B100；B4等价检查复用B2。若ICD显示债务修复有明确增量，再补TCM的B5固定覆盖对照，不重新设计课程。TCM各方法统一CE与最大长度。再入院仅为可选外推。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "现代强骨干/方法对照优先PLM-ICD或现有PLM标签注意力头；HiCu需本体且会改变输出任务，因此为ICD专项对照。SPMLD原始算法是矩阵/相关性模型：深度骨干上的多样性正则版本必须命名为adaptation，并以原文正则和超参作为来源。ADO与Data Agent可先作机制对照：前者域级学习潜力，后者训练策略网络；移植不完整时必须标注，不能把简化实现当作者官方结果。",
+          "citation_ids": [
+            "huang2022plmicd",
+            "ren2022hicu",
+            "seyedi2019spmld",
+            "jiang2025ado",
+            "yang2026dataagent"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "必须加入InfoBatch-style same-risk adaptation：缓存最近一次未加权逐记录risk loss，未观测初始化为1；每200更新令低于全体缓存均值的记录保留分数h_i=0.5，其余h_i=1，定义q_i=h_i/Σ_j h_j；用相同有放回抽样及严格π_i/q_i训练。首5% token均匀warmup，最后12.5% token恢复q=uniform，全部计预算。该版本保留作者低loss软裁剪及末期全量思想，但改变原逐epoch裁剪、1/(1−ρ)重标定与迭代次数协议，明确不是完整原版复现。不得把作者重标定系数与π/q叠乘。",
+          "citation_ids": [
+            "qin2024infobatch"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "InfoBatch适配与B6共享骨干、风险、长度及总token上限，记录评分/阈值刷新/预处理成本与完整墙钟，不以裁剪比例代替实际节省。可选BLS代理行只替换InfoBatch分数：每个有效批的未加权平均risk loss更新参与样本的EMA，α=0.9为本项目设计默认值，其余调度与预算不变；这不是作者超参已在医疗验证的声明。该行在核心主表后开展。",
+          "citation_ids": [
+            "zhou2026bls"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "长文本敏感性在B0/B6上比较512、2048、4096，允许时再加8192。B5把b(t)固定为b0，用于债务消融；κ=1时b0=f且b(t)=f，B5/B6理应退化为同一策略，作为端点sanity。分别移除探索、IS与成本上界；ε=0取消权重界，只作受控失败案例。B3已经以固定r作KL锚点，不再重复定义含义重叠的“EMA+静态频次”方法。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s12",
+      "title": "12. 指标、统计、不确定性与OOD",
+      "lead": "主要终点事先确定；阈值、校准与分组规则在开发阶段冻结。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "主终点是完整ICD设置B50时的macro-F1；micro-F1为不得明显退化的护栏。辅助报告micro/macro-AUPRC、AUROC、P@8/P@15（Full）或P@5（Top50）、训练频次分组macro-F1、按文本长度分组结果。测试中无正例的标签对AUROC不可定义，需报告可评价标签数与排除规则；不能把未定义项写成0后直接平均。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "频次组完全由训练数据确定：tail为1–10，middle为11–100，head为>100；可另给频次分位数组，但不能依据测试表现重划组。仅训练集无正例的标签另列zero-shot/unseen，不计入训练覆盖承诺。TCM单标签同时报告accuracy、macro-F1和各证候召回；多标签则沿用ICD定义。",
+          "citation_ids": []
+        },
+        {
+          "type": "equation",
+          "latex": "\\operatorname{DebtRate}(S)=\\frac1L\\sum_l\\frac{D_l(S)}{Sb_l^0+1}",
+          "plain_text": "DebtRate=mean_l(debt_l/(S*base_target_l+1))",
+          "caption": "同时报告tail子集DebtRate与零曝光标签数，避免少数高频标签掩盖不足。"
+        },
+        {
+          "type": "paragraph",
+          "text": "主要覆盖指标为tail DebtRate、累计零曝光标签比例、每标签正例曝光分位点与真实总抽样数；画出对累计编码token的轨迹。另报告采样分布熵、KL(q||r)、ESS和新观测占比，说明方法如何分配预算。大标签的平均正例曝光可很高，却仍遗漏稀有标签，因此不能仅展示平均值。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "ICD多标签阈值使用开发集搜索的单一全局阈值，并补0.5结果；不对极少开发正例逐标签拟合。TCM单标签使用softmax argmax，不用0.5或全局二值阈值。概率校准使用独立开发校准子集和单温度；选择/校准子集按组分开。ICD报告Brier、20-bin label-wise ECE/MECE及频次组结果；TCM报告多类Brier/ECE。单温度不改变TCM的argmax及F1，校准改善不能声称提高单标签分类准确率。",
+          "citation_ids": [
+            "gomes2024msam"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "统计报告3种子均值和标准差，并对患者/病案组作配对bootstrap 2000次；有患者ID时以患者为重采样单位，无该ID时明确退化为病案级。主终点只检验预先指定的B6与最强同骨干基线；其他多组结果作为探索性分析，并报告多重比较处理或不作显著性结论。三种子不足以精确估计所有训练随机性，不能仅凭bootstrap替代种子重复。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "OOD只在有清晰来源/时间字段时做真实跨时间或跨来源评价，并检查训练与测试组互斥。MIMIC-III到MIMIC-IV同时改变医院时期、预处理和代码版本，不能直接称为纯文本分布迁移。中文TCM与英文ICD是跨任务验证，不是零样本跨域推理。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "没有真实外部集时，可预注册缩写替换、文本段落删除和轻度拼写扰动，标注为合成鲁棒性。扰动不得改变诊断标签的医学含义；证据段删除可能使标签不可从输入判定，需单独解释而非简单归因模型错误。若报告弃答/风险—覆盖曲线，阈值由开发集固定，不作患者安全或临床部署能力声明。",
+          "citation_ids": []
+        }
+      ]
+    },
+    {
+      "id": "s13",
+      "title": "13. 第二阶段：知识、检索和LLM证据备选",
+      "lead": "只有核心覆盖—收益假设通过后，才增加一个备选信号；必须保持论文主贡献集中。",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "知识备选优先GKI-ICD：使用训练正标签的官方描述、同义词和祖先描述，离线缓存固定版本。可比较“仅知识训练正则”和“相同知识一致性作为课程utility”的两条路线，检验知识究竟改进表征还是改进选择。所有guideline只由训练标签合成；验证/测试不读取其真值构造模型输入。原论文训练期知识注入不增加推理分支，但双路训练的token必须计入总预算。",
+          "citation_ids": [
+            "zhang2025gki"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "检索备选使用纯文本与官方标签描述的BM25或小型领域双编码器，先报告候选Recall@K，再讨论重排与难度。若正确标签未被召回，任何后续重排都无法恢复它；候选集合本身也是混淆难度来源。MRR需要DRG/CPT/药物等额外编码，不能将其原文结果作为本项目纯文本条件下的公平优劣证据。",
+          "citation_ids": [
+            "wang2024mrr"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "证据备选借鉴2026解释研究，分别评价LLM证据的文本跨度合理性与对学生决策的忠实性。只从已授权训练样本抽固定小集离线标注，首批100例、按头中尾及长短分层；由模型输出原文跨度，拒绝无法在原文定位的证据。若需专家审阅或在线模型调用，应在实际实施时获得数据处理授权；本轮没有调用此类服务。",
+          "citation_ids": [
+            "li2026rationales"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "LLM对“难”的打分不能作为真实难度标签直接监督新课程：模型可能受诊断词显式程度、医学知识覆盖或提示风格影响。较稳妥的用途是审计高债务/低收益群体是否为噪声或证据缺失；保留“复杂但可靠”与“标签可疑”两个维度，不把高损失全当噪声删除。DKEC展示知识可增强小模型少样本分类，MedCodER展示抽取—检索—重排组合，但二者都不能替代本项目的同骨干因果消融。",
+          "citation_ids": [
+            "ge2024dkec",
+            "baksi2025medcoder"
+          ]
+        },
+        {
+          "type": "paragraph",
+          "text": "中文ICD可考虑ToT-ICD的Code4Detail作额外验证，但它只有560篇、侧重常见病且进行了叙事重构，不适合作本项目长尾训练主证据。首轮TCM证候任务不因为该数据集可见就更换为另一中文任务。",
+          "citation_ids": [
+            "xu2026tree"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s14",
+      "title": "14. 成功、停止标准和研究交付",
+      "lead": "先冻结评价口径与失败处理，再运行模型；负结果同样应形成可复算的研究结论。",
+      "blocks": [
+        {
+          "type": "table",
+          "columns": [
+            "检查点",
+            "继续/成功条件",
+            "停止或降级条件"
+          ],
+          "rows": [
+            [
+              "G0数据与复现",
+              "划分、标签、成本和数据权限清单完整；B0和原TACL入口可重现。",
+              "数据版本不明、患者泄漏、原方法入口不可定位时停止算法优劣结论。"
+            ],
+            [
+              "G1工程可行",
+              "所有概率有限；约束残差达标；恢复后采样轨迹一致；48GB配置可跑。",
+              "连续3次投影失败、预算超支、OOM或权重异常即暂停查因。"
+            ],
+            [
+              "G2核心效应",
+              "B50下B6较最强同骨干基线macro-F1绝对提高≥0.01，配对CI下界>0；micro-F1下降不超过0.005。",
+              "三种子效果不稳定或改进只能来自目标风险改变，则判H1未支持。"
+            ],
+            [
+              "G3机制支持",
+              "tail DebtRate相对收益独用降低≥20%；完整方法较B2静态r与B5固定覆盖有增量；B4只检验等价。",
+              "若B6与B5无差异则不声称动态债务增量；覆盖改善而F1不变只报告分配机制。"
+            ],
+            [
+              "G4效率",
+              "总墙钟新增开销≤10%，或达到基线分数所需总墙钟更少；所有离线成本计入。",
+              "等token赢分但墙钟明显变差时不声称加速，单独报告精度—成本权衡。"
+            ],
+            [
+              "G5跨任务",
+              "TCM三种子方向一致，macro-F1平均改进且无明显micro/accuracy退化。",
+              "需要任务特制课程才有效，缩小结论至ICD，不追加任务掩盖。"
+            ]
+          ],
+          "caption": ""
+        },
+        {
+          "type": "paragraph",
+          "text": "这些阈值为预注册默认值，不是已达到的承诺。如需修改，须在正式主实验和测试访问前依据开发试验统一修改并留版本；不能事后改门槛。预算缩减优先保留B0/B1/B2/B3/B5/B6及3种子；B4复用B2、不占额外GPU。减少知识增强和长度网格。",
+          "citation_ids": []
+        },
+        {
+          "type": "paragraph",
+          "text": "若H1失败，按顺序排查：EMA刷新年龄偏差、重要性权重方差、覆盖目标过强、共现导致重复曝光、标签噪声与文本截断。只允许一个预注册修订周期：提高探索或降低κ，开发集选择后重新冻结。仍失败则交付负结果与诊断，停止追加架构。未经主线通过不开展全量LLM知识生成。",
+          "citation_ids": []
+        },
+        {
+          "type": "bullets",
+          "items": [
+            "本研究资料工作已交付：22篇一手文献索引及BibTeX、结构化中文研究正文、实验矩阵、实现检查清单。",
+            "本研究资料工作未执行：新课程源码、GPU训练、模型或受限数据下载、性能与显存实测、云端临床文本处理；主任务的仓库重构另有记录。",
+            "后续代码交付要求：稀疏状态、可行回退、抽样时概率、预算计数与恢复一致性；配套简小合成数据测试，不用受限数据作工程测试。",
+            "后续研究交付要求：冻结配置与数据哈希、逐种子结果、预算曲线、覆盖债务轨迹、统计区间、失败日志和可复算预测。"
+          ],
+          "citation_ids": []
+        }
+      ]
+    }
+  ],
+  "references": [
+    {
+      "id": "ren2025tacl",
+      "title": "TACL: Threshold-Adaptive Curriculum Learning Strategy for Enhancing Medical Text Understanding",
+      "authors": "Mucheng Ren; Yucheng Yan; He Chen; Danqing Hu; Jun Xu; Xian Zeng",
+      "year": 2025,
+      "status": "BIBM 2025 Regular，作者 camera-ready v2 确认；IEEE落地页本次触发验证页",
+      "url": "https://arxiv.org/abs/2510.15269",
+      "code_url": "https://github.com/jsntyyc/BIBM25-TACL"
+    },
+    {
+      "id": "graves2017acl",
+      "title": "Automated Curriculum Learning for Neural Networks",
+      "authors": "Alex Graves; Marc G. Bellemare; Jacob Menick; Rémi Munos; Koray Kavukcuoglu",
+      "year": 2017,
+      "status": "已发表：ICML 2017",
+      "url": "https://proceedings.mlr.press/v70/graves17a.html",
+      "code_url": ""
+    },
+    {
+      "id": "wang2019dcl",
+      "title": "Dynamic Curriculum Learning for Imbalanced Data Classification",
+      "authors": "Yiru Wang; Weihao Gan; Jie Yang; Wei Wu; Junjie Yan",
+      "year": 2019,
+      "status": "已发表：ICCV 2019",
+      "url": "https://openaccess.thecvf.com/content_ICCV_2019/html/Wang_Dynamic_Curriculum_Learning_for_Imbalanced_Data_Classification_ICCV_2019_paper.html",
+      "code_url": ""
+    },
+    {
+      "id": "seyedi2019spmld",
+      "title": "Self-Paced Multi-Label Learning with Diversity",
+      "authors": "Seyed Amjad Seyedi; S. Siamak Ghodsi; Fardin Akhlaghian; Mahdi Jalili; Parham Moradi",
+      "year": 2019,
+      "status": "已发表：ACML 2019",
+      "url": "https://proceedings.mlr.press/v101/seyedi19a.html",
+      "code_url": "https://github.com/amjadseyedi/SPMLD"
+    },
+    {
+      "id": "ren2022hicu",
+      "title": "HiCu: Leveraging Hierarchy for Curriculum Learning in Automated ICD Coding",
+      "authors": "Weiming Ren; Ruijing Zeng; Tongzi Wu; Tianshu Zhu; Rahul G. Krishnan",
+      "year": 2022,
+      "status": "已发表：MLHC 2022",
+      "url": "https://proceedings.mlr.press/v182/ren22a.html",
+      "code_url": "https://github.com/wren93/HiCu-ICD"
+    },
+    {
+      "id": "wu2020dbl",
+      "title": "Distribution-Balanced Loss for Multi-Label Classification in Long-Tailed Datasets",
+      "authors": "Tong Wu; Qingqiu Huang; Ziwei Liu; Yu Wang; Dahua Lin",
+      "year": 2020,
+      "status": "已发表：ECCV 2020",
+      "url": "https://www.ecva.net/papers/eccv_2020/papers_ECCV/html/1631_ECCV_2020_paper.php",
+      "code_url": "https://github.com/wutong16/DistributionBalancedLoss"
+    },
+    {
+      "id": "ridnik2021asl",
+      "title": "Asymmetric Loss for Multi-Label Classification",
+      "authors": "Tal Ridnik; Emanuel Ben-Baruch; Nadav Zamir; Asaf Noy; Itamar Friedman; Matan Protter; Lihi Zelnik-Manor",
+      "year": 2021,
+      "status": "已发表：ICCV 2021",
+      "url": "https://openaccess.thecvf.com/content/ICCV2021/html/Ridnik_Asymmetric_Loss_for_Multi-Label_Classification_ICCV_2021_paper.html",
+      "code_url": "https://github.com/Alibaba-MIIL/ASL"
+    },
+    {
+      "id": "huang2022plmicd",
+      "title": "PLM-ICD: Automatic ICD Coding with Pretrained Language Models",
+      "authors": "Chao-Wei Huang; Shang-Chi Tsai; Yun-Nung Chen",
+      "year": 2022,
+      "status": "已发表：ClinicalNLP 2022",
+      "url": "https://aclanthology.org/2022.clinicalnlp-1.2/",
+      "code_url": "https://github.com/MiuLab/PLM-ICD"
+    },
+    {
+      "id": "edin2023repro",
+      "title": "Automated Medical Coding on MIMIC-III and MIMIC-IV: A Critical Review and Replicability Study",
+      "authors": "Joakim Edin; Alexander Junge; Jakob D. Havtorn; Lasse Borgholt; Maria Maistro; Tuukka Ruotsalo; Lars Maaløe",
+      "year": 2023,
+      "status": "已发表：SIGIR 2023",
+      "url": "https://arxiv.org/abs/2304.10909",
+      "code_url": "https://github.com/JoakimEdin/medical-coding-reproducibility"
+    },
+    {
+      "id": "luo2024corelation",
+      "title": "CoRelation: Boosting Automatic ICD Coding through Contextualized Code Relation Learning",
+      "authors": "Junyu Luo; Xiaochen Wang; Jiaqi Wang; Aofei Chang; Yaqing Wang; Fenglong Ma",
+      "year": 2024,
+      "status": "已发表：LREC-COLING 2024",
+      "url": "https://aclanthology.org/2024.lrec-main.355/",
+      "code_url": "https://github.com/machinelearning4health/CoRelation"
+    },
+    {
+      "id": "gomes2024msam",
+      "title": "Accurate and Well-Calibrated ICD Code Assignment Through Attention Over Diverse Label Embeddings",
+      "authors": "Goncalo Gomes; Isabel Coutinho; Bruno Martins",
+      "year": 2024,
+      "status": "已发表：EACL 2024",
+      "url": "https://aclanthology.org/2024.eacl-long.141/",
+      "code_url": "https://github.com/gecgomes/ICD_Coding_MSAM"
+    },
+    {
+      "id": "wang2024mrr",
+      "title": "Multi-stage Retrieve and Re-rank Model for Automatic Medical Coding Recommendation",
+      "authors": "Xindi Wang; Robert Mercer; Frank Rudzicz",
+      "year": 2024,
+      "status": "已发表：NAACL 2024",
+      "url": "https://aclanthology.org/2024.naacl-long.273/",
+      "code_url": "https://github.com/xdwang0726/ICD-contrastive-curriculum"
+    },
+    {
+      "id": "ge2024dkec",
+      "title": "DKEC: Domain Knowledge Enhanced Multi-Label Classification for Diagnosis Prediction",
+      "authors": "Xueren Ge; Abhishek Satpathy; Ronald Dean Williams; John Stankovic; Homa Alemzadeh",
+      "year": 2024,
+      "status": "已发表：EMNLP 2024",
+      "url": "https://aclanthology.org/2024.emnlp-main.712/",
+      "code_url": "https://github.com/UVA-DSA/DKEC"
+    },
+    {
+      "id": "zhang2025gki",
+      "title": "A General Knowledge Injection Framework for ICD Coding",
+      "authors": "Xu Zhang; Kun Zhang; Wenxin Ma; Rongsheng Wang; Chenxu Wu; Yingtai Li; S Kevin Zhou",
+      "year": 2025,
+      "status": "已发表：Findings ACL 2025",
+      "url": "https://aclanthology.org/2025.findings-acl.374/",
+      "code_url": "https://github.com/xuzhang0112/GKI-ICD"
+    },
+    {
+      "id": "jiang2025ado",
+      "title": "Adaptive Data Optimization: Dynamic Sample Selection with Scaling Laws",
+      "authors": "Yiding Jiang; Allan Zhou; Zhili Feng; Sadhika Malladi; J. Zico Kolter",
+      "year": 2025,
+      "status": "已发表：ICLR 2025；首次arXiv为2024",
+      "url": "https://proceedings.iclr.cc/paper_files/paper/2025/hash/923285deb805c3e14e1aeebc9854d644-Abstract-Conference.html",
+      "code_url": "https://github.com/yidingjiang/ado"
+    },
+    {
+      "id": "yang2026dataagent",
+      "title": "Data Agent: Learning to Select Data via End-to-End Dynamic Optimization",
+      "authors": "Suorong Yang; Fangjian Su; Hai Gan; Ziqi Ye; Jie Li; Baile Xu; Furao Shen; Soujanya Poria",
+      "year": 2026,
+      "status": "已发表：ICML 2026",
+      "url": "https://proceedings.mlr.press/v306/yang26bq.html",
+      "code_url": "https://github.com/Jackbrocp/Data-Agent"
+    },
+    {
+      "id": "li2026rationales",
+      "title": "Evaluation and LLM-Guided Learning of ICD Coding Rationales",
+      "authors": "Mingyang Li; Viktor Schlegel; Tingting Mu; Wuraola Oyewusi; Kai Kang; Goran Nenadic",
+      "year": 2026,
+      "status": "已发表：EACL 2026",
+      "url": "https://aclanthology.org/2026.eacl-long.232/",
+      "code_url": "https://github.com/mingyangligithub/ICD-Coding-Explainability-Evaluation"
+    },
+    {
+      "id": "xu2026tree",
+      "title": "Travel on the ICD Tree: Benchmarking Agentic Reasoning for ICD Coding from Chinese Electronic Medical Records",
+      "authors": "Xinjie Xu; Yongqi Fan; Shuang-shuang Chen; Qi Ye; Weibin Guo; Xinxuan Hu",
+      "year": 2026,
+      "status": "已发表：Findings ACL 2026",
+      "url": "https://aclanthology.org/2026.findings-acl.191/",
+      "code_url": "https://github.com/JOHNNY-fans/Travel-on-the-ICD-Tree"
+    },
+    {
+      "id": "baksi2025medcoder",
+      "title": "MedCodER: A Generative AI Assistant for Medical Coding",
+      "authors": "Krishanu Das Baksi; Elijah Soba; John J Higgins; Ravi Saini; Jaden Wood; Jane Cook; Jack I Scott; Nirmala Pudota; Tim Weninger; Edward Bowen; Sanmitra Bhattacharya",
+      "year": 2025,
+      "status": "已发表：NAACL 2025 Industry",
+      "url": "https://aclanthology.org/2025.naacl-industry.37/",
+      "code_url": ""
+    },
+    {
+      "id": "xiao2025curiosity",
+      "title": "Curiosity Meets Cooperation: A Game-Theoretic Approach to Long-Tail Multi-Label Learning",
+      "authors": "Canran Xiao; Chuangxin Zhao; Zong Ke; Fei Shen",
+      "year": 2025,
+      "status": "arXiv预印本；未核实正式发表，HTML的Journal字样不足以确认录用",
+      "url": "https://arxiv.org/abs/2510.17520",
+      "code_url": ""
+    },
+    {
+      "id": "qin2024infobatch",
+      "title": "InfoBatch: Lossless Training Speed Up by Unbiased Dynamic Data Pruning",
+      "authors": "Ziheng Qin; Kai Wang; Zangwei Zheng; Jianyang Gu; Xiangyu Peng; Zhaopan Xu; Daquan Zhou; Lei Shang; Baigui Sun; Xuansong Xie; Yang You",
+      "year": 2024,
+      "status": "已发表：ICLR 2024",
+      "url": "https://proceedings.iclr.cc/paper_files/paper/2024/hash/ad1d7a4df30a9c0c46b387815a774a84-Abstract-Conference.html",
+      "code_url": "https://github.com/NUS-HPC-AI-Lab/InfoBatch"
+    },
+    {
+      "id": "zhou2026bls",
+      "title": "Batch Loss Score for Dynamic Data Pruning",
+      "authors": "Qing Zhou; Bingxuan Zhao; Tao Yang; Hongyuan Zhang; Junyu Gao; Qi Wang",
+      "year": 2026,
+      "status": "作者arXiv Comments注明CVPR2026 accepted；本次未独立核实CVF正式收录页",
+      "url": "https://arxiv.org/abs/2604.04681",
+      "code_url": "https://github.com/mrazhou/BLS"
+    }
+  ],
+  "appendices": [
+    {
+      "id": "a01",
+      "title": "默认配置表（研究设计值）",
+      "blocks": [
+        {
+          "type": "table",
+          "columns": [
+            "参数",
+            "默认值",
+            "解释"
+          ],
+          "rows": [
+            [
+              "风险π",
+              "1/N",
+              "主实验自然经验风险；平衡风险另表"
+            ],
+            [
+              "η/ε/κ/τ",
+              "0.5 / 0.2 / 0.8 / 0.5",
+              "参考混合/探索/覆盖基础比/熵温度"
+            ],
+            [
+              "EMA K / refresh",
+              "200 / 200更新",
+              "按优化器更新计时"
+            ],
+            [
+              "warmup",
+              "总token预算的5%",
+              "按r抽样；计入总预算"
+            ],
+            [
+              "修复H",
+              "N次记录抽样",
+              "动态需求上限f确保可行"
+            ],
+            [
+              "chunk/maxlength",
+              "128/4096 ICD；512 TCM",
+              "相同任务全部方法一致；48GB待实测"
+            ],
+            [
+              "有效batch",
+              "16记录",
+              "微批1+累积16起步"
+            ],
+            [
+              "种子",
+              "13,17,23",
+              "先13试点，再补重复"
+            ],
+            [
+              "B100",
+              "10×训练集编码token之和",
+              "25/50/100%检查点来自同一次训练"
+            ]
+          ],
+          "caption": ""
+        }
+      ]
+    },
+    {
+      "id": "a02",
+      "title": "证据和结果状态约定",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "text": "文献索引中的“已发表”指正式会议/出版社页面或明确作者终稿证据；访问验证页、404与未找到代码均单独注明。表中的资源设置来自文献，不是本项目资源实测。研究正文中的方程、默认值、成功阈值均为待实现规格。本轮没有执行任何模型性能实验。",
+          "citation_ids": []
+        }
+      ]
+    }
+  ]
+}

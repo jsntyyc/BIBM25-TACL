@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bibm25-tacl-research"
+version = "0.1.0"
+description = "Task-organized research code accompanying TACL, BIBM 2025"
+requires-python = ">=3.10"
+readme = "README.md"
+dependencies = []
+
+[tool.setuptools.packages.find]
+include = ["tasks*"]
+
+[tool.setuptools.package-data]
+"tasks.icd" = ["configs/**/*.yaml"]
+"tasks.tcm" = ["data_preprocess/*.txt", "data_preprocess/*.json", "data_preprocess/wc_cn/*.txt"]

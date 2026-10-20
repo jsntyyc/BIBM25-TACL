@@ -1,0 +1,14 @@
+defaults:
+  - defaults
+dir: ${paths.data_root}/mimiciii_clean
+split_dir: ${paths.split_root}/mimiciii_clean
+data_filename: mimiciii_clean.feather
+split_filename: mimiciii_clean_splits.feather
+code_column_names:
+  - icd9_diag
+  - icd9_proc
+max_length: 4000
+
+
+
+

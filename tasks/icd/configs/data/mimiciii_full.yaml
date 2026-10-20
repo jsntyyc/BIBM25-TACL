@@ -1,0 +1,15 @@
+defaults:
+  - defaults
+
+dir: ${paths.data_root}/mimiciii_full
+split_dir: ${paths.split_root}/mimiciii_full
+data_filename: mimiciii_cluster3.feather
+split_filename: mimiciii_full_splits.feather
+code_column_names:
+  - icd9_diag
+  - icd9_proc
+max_length: 4000
+
+# mimiciii_full_difficulty_from_targets.feather
+# mimiciii_full_difficulty_from_words.feather
+# mimiciii_full_difficulty_from_frequency.feather

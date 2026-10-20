@@ -1,0 +1,38 @@
+{
+  "as_of": "2026-10-20",
+  "status": "passed_document_consistency_checks",
+  "sections": 14,
+  "appendices": 2,
+  "references": 22,
+  "experiment_rows": 30,
+  "checklist_rows": 29,
+  "zero_additional_training_equivalence_rows": 2,
+  "missing_citations": [],
+  "tables_rectangular": true,
+  "bibtex_keys_match": true,
+  "bibtex_braces_balanced": true,
+  "ado_status": "ICLR 2025",
+  "data_agent_status": "ICML 2026",
+  "algorithm_implemented": false,
+  "gpu_experiments_run": false,
+  "restricted_data_downloaded": false,
+  "source_length_characters": 35113,
+  "mathematical_review_corrections": [
+    "B4 zero-utility case equals reference r and reuses B2.",
+    "B5 fixed coverage b0 compared against B6 dynamic debt; kappa=1 endpoint equivalence.",
+    "Effective batch size fixed before sampling from remaining budget and cmax.",
+    "EMA age decay is read-only; median/MAD excludes unobserved placeholders.",
+    "Native TACL separated from full-support exploration+IS adaptation.",
+    "TCM single-label uses argmax; temperature does not change F1.",
+    "Draw multiplicity retained in gradients, costs and exposures."
+  ],
+  "limitations": [
+    "No accuracy, speed, VRAM, or training-cost measurements.",
+    "Full formal proof and software implementation remain future work.",
+    "Access failures and unverified official code resources are disclosed per source."
+  ],
+  "additional_source_status": {
+    "InfoBatch": "ICLR 2024 official proceedings and PDF",
+    "BLS": "author-reported CVPR 2026 accepted in arXiv Comments; CVF not independently verified"
+  }
+}
