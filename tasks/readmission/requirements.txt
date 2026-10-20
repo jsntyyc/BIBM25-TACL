@@ -1,0 +1,15 @@
+# Import inventory, not a verified reproducibility lock. Use a separate environment.
+# Legacy numpy/scipy APIs in the preserved source require the bounds below.
+numpy<2
+scipy<1.12
+pandas
+torch
+pytorch-pretrained-bert
+scikit-learn
+matplotlib
+tqdm
+gensim
+xgboost
+umap-learn
+# Only the explicit pretrained-model download example uses this newer stack:
+transformers

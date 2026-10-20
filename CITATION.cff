@@ -1,0 +1,37 @@
+cff-version: 1.2.0
+message: "Please cite the TACL paper when using these experiments."
+title: "TACL medical text understanding research code"
+type: software
+authors:
+  - family-names: Ren
+    given-names: Mucheng
+  - family-names: Yan
+    given-names: Yucheng
+  - family-names: Chen
+    given-names: He
+  - family-names: Hu
+    given-names: Danqing
+  - family-names: Xu
+    given-names: Jun
+  - family-names: Zeng
+    given-names: Xian
+repository-code: "https://github.com/jsntyyc/BIBM25-TACL"
+preferred-citation:
+  type: article
+  title: "TACL: Threshold-Adaptive Curriculum Learning Strategy for Enhancing Medical Text Understanding"
+  authors:
+    - family-names: Ren
+      given-names: Mucheng
+    - family-names: Yan
+      given-names: Yucheng
+    - family-names: Chen
+      given-names: He
+    - family-names: Hu
+      given-names: Danqing
+    - family-names: Xu
+      given-names: Jun
+    - family-names: Zeng
+      given-names: Xian
+  year: 2025
+  doi: "10.48550/arXiv.2510.15269"
+  url: "https://arxiv.org/abs/2510.15269v2"

@@ -1,0 +1,10 @@
+{
+  "upstream_commit": "67306350a049daf87ef5ac384b367c87d5b349eb",
+  "python_source_files": 183,
+  "migration_records": 465,
+  "unchanged_assets_verified": 114,
+  "help_entries_verified": 34,
+  "training_executed": false,
+  "errors": [],
+  "passed": true
+}
